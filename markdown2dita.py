@@ -17,7 +17,7 @@ __version__ = '0.3'
 __author__ = 'Matt Carabine <matt.carabine@gmail.com>'
 __all__ = ['Renderer', 'Markdown', 'markdown', 'escape']
 
-
+# Defining a custom renderer
 class Renderer(mistune.Renderer):
 
     def codespan(self, text):
@@ -39,9 +39,13 @@ class Renderer(mistune.Renderer):
 
     def header(self, text, level, raw=None):
         # Dita only supports one title per section
+        global topic_title
+        topic_title_level = self.options.get('title_level', 1)
         title_level = self.options.get('title_level', 2)
+        if level == topic_title_level:
+            topic_title = '{0}'.format(text)
         if level <= title_level:
-            return '</section><section><title>{0}</title>'.format(text)
+            return '</section>\n<section>\n<title>{0}</title>\n'.format(text)
         else:
             return '<p><b>{0}</b></p>'.format(text)
 
@@ -61,13 +65,13 @@ class Renderer(mistune.Renderer):
         return text
 
     def list_item(self, text):
-        return '<li>{0}</li>'.format(text)
+        return '<li>{0}</li>\n'.format(text)
 
     def list(self, body, ordered=True):
         if ordered:
-            return '<ol>{0}</ol>'.format(body)
+            return '<ol>{0}</ol>\n'.format(body)
         else:
-            return '<ul>{0}</ul>'.format(body)
+            return '<ul>{0}</ul>\n'.format(body)
 
     def image(self, src, title, text):
 
@@ -137,9 +141,13 @@ class Markdown(mistune.Markdown):
     def parse(self, text, page_id='enter-id-here',
               title='Enter the page title here'):
         output = super(Markdown, self).parse(text)
+        # To get nested concepts working:
+        # - pick out each level in the markdown
+        # - process separately
+        # Regex?
 
         if output.startswith('</section>'):
-            output = output[9:]
+            output = output[10:]
         else:
             output = '<section>\n' + output
 
@@ -148,10 +156,9 @@ class Markdown(mistune.Markdown):
 <concept xml:lang="en-us" id="{0}">
 <title>{1}</title>
 <shortdesc>Enter the short description for this page here</shortdesc>
-<conbody>
-{2}</section>
+<conbody>{2}</section>
 </conbody>
-</concept>""".format(page_id, title, output)
+</concept>""".format((topic_title.lower()).replace(" ", "_"), topic_title, output)
         return output
 
     def output_table(self):
@@ -208,6 +215,7 @@ def markdown(text, escape=True, **kwargs):
 def main():
     parsed_args = _parse_args(sys.argv[1:])
 
+    # Read the input file specified, fall back to stdin or raise an error
     if parsed_args.input_file:
         input_str = open(parsed_args.input_file, 'r').read()
     elif not sys.stdin.isatty():
@@ -221,6 +229,7 @@ def main():
     markdown = Markdown()
     dita_output = markdown(input_str)
 
+    # Write to the output file specified, or otherwise print to stdout
     if parsed_args.output_file:
         with open(parsed_args.output_file, 'w') as output_file:
             output_file.write(dita_output)
