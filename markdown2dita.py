@@ -12,10 +12,12 @@ import argparse
 import sys
 
 import mistune
+import re
 
 __version__ = '0.3'
 __author__ = 'Matt Carabine <matt.carabine@gmail.com>'
 __all__ = ['Renderer', 'Markdown', 'markdown', 'escape']
+
 
 # Defining a custom renderer
 class Renderer(mistune.Renderer):
@@ -39,11 +41,10 @@ class Renderer(mistune.Renderer):
 
     def header(self, text, level, raw=None):
         # Dita only supports one title per section
-        global topic_title
         topic_title_level = self.options.get('title_level', 1)
         title_level = self.options.get('title_level', 2)
         if level == topic_title_level:
-            topic_title = '{0}'.format(text)
+            return '{0}'.format(text)
         if level <= title_level:
             return '</section>\n<section>\n<title>{0}</title>\n'.format(text)
         else:
@@ -127,6 +128,7 @@ class Renderer(mistune.Renderer):
     def strikethrough(self, text):
         return text
 
+
 class Markdown(mistune.Markdown):
 
     def __init__(self, renderer=None, inline=None, block=None, **kwargs):
@@ -140,26 +142,67 @@ class Markdown(mistune.Markdown):
 
     def parse(self, text, page_id='enter-id-here',
               title='Enter the page title here'):
-        output = super(Markdown, self).parse(text)
-        # To get nested concepts working:
-        # - pick out each level in the markdown
-        # - process separately
-        # Regex?
 
-        if output.startswith('</section>'):
-            output = output[10:]
-        else:
-            output = '<section>\n' + output
-
-        output = """<?xml version="1.0" encoding="utf-8"?>
+        # Preamble and DTD declaration
+        declaration = """<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-<concept xml:lang="en-us" id="{0}">
+"""
+
+        def split_text(input):
+            # Apply a regex to split the file into:
+            # 1 - title
+            # 2 - conbody (up until the first ## heading)
+            # 3 - everything else
+            try:
+                regex = r"(\s#.*)([\s\S]*?\n)(##[\s\S]*)"
+                text_split = re.findall(regex, input)
+                title = text_split[0][0]
+                conbody = text_split[0][1]
+                nested = text_split[0][2]
+                return title, conbody, nested
+            except IndexError:
+                regex = r"(\s#.*)([\s\S]*)"
+                text_split = re.findall(regex, input)
+                title = text_split[0][0]
+                conbody = text_split[0][1]
+                nested = None
+                return title, conbody, nested
+
+        # Need to:
+        # * Pick out first paragraph and use as <shortdesc>
+        # * Replace <section> with <concept><conbody>
+        # * Allow <concept> for h3 and h4, with proper nesting
+        #   * header() already supports further levels, via title_level
+        #   * need to get the nesting working - for loops?
+
+        def process_conbody(text):
+            text = super(Markdown, self).parse(text)
+            if text.startswith('</section>'):
+                text = text[10:]
+            return text
+
+        def process_nested(text):
+            if text is None:
+                return ""
+            else:
+                text = super(Markdown, self).parse(text) + '\n</section>\n'
+                if text.startswith('</section>'):
+                    text = text[10:]
+                else:
+                    text = '<section>\n' + text
+                return text
+
+        title, conbody, nested = split_text(text)
+        title_output = super(Markdown, self).parse(title)
+        conbody_output = process_conbody(conbody)
+        nested_output = process_nested(nested)
+
+        dita = declaration + """<concept xml:lang="en-us" id="{0}">
 <title>{1}</title>
 <shortdesc>Enter the short description for this page here</shortdesc>
-<conbody>{2}</section>
-</conbody>
-</concept>""".format((topic_title.lower()).replace(" ", "_"), topic_title, output)
-        return output
+<conbody>{2}{3}</conbody>
+</concept>""".format((title_output.lower()).replace(" ", "_"), title_output, conbody_output, nested_output)
+        return dita
 
     def output_table(self):
 
