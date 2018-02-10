@@ -148,21 +148,19 @@ class Markdown(mistune.Markdown):
 <!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
 """
 
-        def split_text(input):
+        def split_text(input, regex, fallbackregex):
             # Apply a regex to split the file into:
             # 1 - title
             # 2 - conbody (up until the first ## heading)
             # 3 - everything else
             try:
-                regex = r"(\s#.*)([\s\S]*?\n)(##[\s\S]*)"
                 text_split = re.findall(regex, input)
                 title = text_split[0][0]
                 conbody = text_split[0][1]
                 nested = text_split[0][2]
                 return title, conbody, nested
             except IndexError:
-                regex = r"(\s#.*)([\s\S]*)"
-                text_split = re.findall(regex, input)
+                text_split = re.findall(fallbackregex, input)
                 title = text_split[0][0]
                 conbody = text_split[0][1]
                 nested = None
@@ -192,7 +190,9 @@ class Markdown(mistune.Markdown):
                     text = '<section>\n' + text
                 return text
 
-        title, conbody, nested = split_text(text)
+        title, conbody, nested = split_text(text,
+                                            r"(\s#.*)([\s\S]*?\n)(##[\s\S]*)",
+                                            r"(\s#.*)([\s\S]*)")
         title_output = super(Markdown, self).parse(title)
         conbody_output = process_conbody(conbody)
         nested_output = process_nested(nested)
