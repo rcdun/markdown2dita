@@ -12,7 +12,6 @@ import argparse
 import sys
 
 import mistune
-import re
 
 __version__ = '0.3'
 __author__ = 'Matt Carabine <matt.carabine@gmail.com>'
@@ -40,15 +39,8 @@ class Renderer(mistune.Renderer):
         return '<codeblock>{0}</codeblock>'.format(text)
 
     def header(self, text, level, raw=None):
-        # Dita only supports one title per section
-        topic_title_level = self.options.get('title_level', 1)
-        title_level = self.options.get('title_level', 2)
-        if level == topic_title_level:
-            return '{0}'.format(text)
-        if level <= title_level:
-            return '</section>\n<section>\n<title>{0}</title>\n'.format(text)
-        else:
-            return '<p><b>{0}</b></p>'.format(text)
+        # convert.py handlles headers
+        return text
 
     def double_emphasis(self, text):
         return '<b>{0}</b>'.format(text)
@@ -142,67 +134,8 @@ class Markdown(mistune.Markdown):
 
     def parse(self, text, page_id='enter-id-here',
               title='Enter the page title here'):
-
-        # Preamble and DTD declaration
-        declaration = """<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE concept PUBLIC "-//OASIS//DTD DITA Concept//EN" "concept.dtd">
-"""
-
-        def split_text(input, regex, fallbackregex):
-            # Apply a regex to split the file into:
-            # 1 - title
-            # 2 - conbody (up until the first ## heading)
-            # 3 - everything else
-            try:
-                text_split = re.findall(regex, input)
-                title = text_split[0][0]
-                conbody = text_split[0][1]
-                nested = text_split[0][2]
-                return title, conbody, nested
-            except IndexError:
-                text_split = re.findall(fallbackregex, input)
-                title = text_split[0][0]
-                conbody = text_split[0][1]
-                nested = None
-                return title, conbody, nested
-
-        # Need to:
-        # * Pick out first paragraph and use as <shortdesc>
-        # * Replace <section> with <concept><conbody>
-        # * Allow <concept> for h3 and h4, with proper nesting
-        #   * header() already supports further levels, via title_level
-        #   * need to get the nesting working - for loops?
-
-        def process_conbody(text):
-            text = super(Markdown, self).parse(text)
-            if text.startswith('</section>'):
-                text = text[10:]
-            return text
-
-        def process_nested(text):
-            if text is None:
-                return ""
-            else:
-                text = super(Markdown, self).parse(text) + '\n</section>\n'
-                if text.startswith('</section>'):
-                    text = text[10:]
-                else:
-                    text = '<section>\n' + text
-                return text
-
-        title, conbody, nested = split_text(text,
-                                            r"(\s#.*)([\s\S]*?\n)(##[\s\S]*)",
-                                            r"(\s#.*)([\s\S]*)")
-        title_output = super(Markdown, self).parse(title)
-        conbody_output = process_conbody(conbody)
-        nested_output = process_nested(nested)
-
-        dita = declaration + """<concept xml:lang="en-us" id="{0}">
-<title>{1}</title>
-<shortdesc>Enter the short description for this page here</shortdesc>
-<conbody>{2}{3}</conbody>
-</concept>""".format((title_output.lower()).replace(" ", "_"), title_output, conbody_output, nested_output)
-        return dita
+        text = super(Markdown, self).parse(text)
+        return text
 
     def output_table(self):
 
