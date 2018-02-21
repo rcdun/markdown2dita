@@ -139,7 +139,7 @@ class Markdown(mistune.Markdown):
         output = super(Markdown, self).parse(text)
 
         if output.startswith('</section>'):
-            output = output[9:]
+            output = output[10:]
         else:
             output = '<section>\n' + output
 
